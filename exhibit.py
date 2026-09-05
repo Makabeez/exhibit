@@ -323,7 +323,7 @@ class Exhibit(gl.Contract):
 
     # -------------------------------------------------------------- internal
 
-    def _check(self, kind, term, artifact) -> bool:
+    def _check(self, kind, term, artifact):
         """Evaluate one mechanical term. Pure Python, no consensus needed -
         every validator computes the same answer from the same artifact."""
         if kind == "http_ok":
