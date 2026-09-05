@@ -31,7 +31,7 @@ from genlayer import *
 
 EVIDENCE_CHARS = 6000
 HEXDIGITS = "0123456789abcdefABCDEF"
-MECHANICAL = ["http_ok", "json_equals", "json_exists", "array_min", "contains", "sha256"]
+MECHANICAL = "http_ok json_equals json_exists array_min contains sha256"
 
 
 class Exhibit(gl.Contract):
@@ -93,7 +93,7 @@ class Exhibit(gl.Contract):
                 if "claim" not in t:
                     raise gl.vm.UserError("a judged term needs a claim")
                 judged = judged + 1
-            elif kind in MECHANICAL:
+            elif kind in MECHANICAL.split(" "):
                 mechanical = mechanical + 1
             else:
                 raise gl.vm.UserError(f"unknown term kind '{kind}'")
