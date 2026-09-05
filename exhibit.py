@@ -27,6 +27,16 @@ class Exhibit(gl.Contract):
 
         escrow = int(gl.message.value)
 
+        # Terms are one per line. A term is MECHANICAL when it starts with a
+        # kind prefix and a colon - those are evaluated in deterministic Python
+        # after a single consensus fetch, so no jury and no variance. Anything
+        # else is a JUDGED term and goes to the validator jury.
+        #
+        #   contains: Cargo.toml
+        #   json_equals: status = ok
+        #   json_exists: data.items
+        #   array_min: results >= 10
+        #   the summary accurately describes the linked article   <- judged
         items = [c.strip() for c in terms.split("\n") if c.strip()]
         if len(items) <= 1:
             items = [c.strip() for c in terms.split(";") if c.strip()]
@@ -45,6 +55,7 @@ class Exhibit(gl.Contract):
             "artifact_url": "",
             "status": "OPEN",
             "approved": False,
+            "jury_convened": False,
             "appellant": "",
             "bond": "0",
             "first_ruling": None,
@@ -86,11 +97,22 @@ class Exhibit(gl.Contract):
         brief = case["brief"]
         items = case["terms"]
 
-        numbered_lines = []
+        # Partition the terms before anything expensive happens.
+        mech_ids = []
+        judged_ids = []
         i = 0
         while i < len(items):
-            numbered_lines.append(str(i) + ". " + items[i])
+            if self._kind_of(items[i]) == "":
+                judged_ids.append(i)
+            else:
+                mech_ids.append(i)
             i = i + 1
+
+        numbered_lines = []
+        j = 0
+        while j < len(judged_ids):
+            numbered_lines.append(str(judged_ids[j]) + ". " + items[judged_ids[j]])
+            j = j + 1
         numbered = "\n".join(numbered_lines)
 
         def fetch_evidence() -> str:
@@ -118,6 +140,54 @@ class Exhibit(gl.Contract):
                 "INCONCLUSIVE: the artifact exceeded the readable window, so "
                 "the jury was not asked to rule. Escrow held. Resubmit a "
                 "smaller or more specific artifact."
+            )
+            self.cases[case_id] = json.dumps(case)
+            return case["verdict"]
+
+        # --- mechanical terms: deterministic, no jury -------------------
+        # Every validator computes the same answer from the same artifact, so
+        # these cannot be unanimously wrong the way a judged term can. They are
+        # evaluated first, and a failure here means the deliverable is already
+        # out of spec - there is nothing for a jury to add.
+        met_by_id = {}
+        mech_failed = 0
+        m = 0
+        while m < len(mech_ids):
+            tid = mech_ids[m]
+            passed = self._check(items[tid], evidence)
+            met_by_id[tid] = passed
+            if not passed:
+                mech_failed = mech_failed + 1
+            m = m + 1
+
+        if mech_failed > 0 or len(judged_ids) == 0:
+            unmet_texts = []
+            k = 0
+            while k < len(items):
+                if k not in met_by_id:
+                    met_by_id[k] = False
+                if not met_by_id[k]:
+                    unmet_texts.append(items[k])
+                k = k + 1
+
+            ruling_list = []
+            n = 0
+            while n < len(items):
+                ruling_list.append({"id": n, "met": met_by_id[n]})
+                n = n + 1
+
+            approved = len(unmet_texts) == 0
+            case["rulings"] = ruling_list
+            case["unmet"] = unmet_texts
+            case["approved"] = approved
+            case["jury_convened"] = False
+            case["status"] = "RULED"
+            case["verdict"] = (
+                f"RULED ACCEPTED: all {len(items)} terms met by deterministic "
+                "evaluation. No jury was convened. Escrow held pending release."
+                if approved
+                else f"RULED REJECTED: {len(unmet_texts)} of {len(items)} terms "
+                "unmet. Escrow held pending release or appeal."
             )
             self.cases[case_id] = json.dumps(case)
             return case["verdict"]
@@ -169,10 +239,9 @@ class Exhibit(gl.Contract):
         rulings = parsed["rulings"]
         if not isinstance(rulings, list):
             raise gl.vm.UserError("rulings is not a list")
-        if len(rulings) != len(items):
-            raise gl.vm.UserError("ruling count does not match terms count")
+        if len(rulings) != len(judged_ids):
+            raise gl.vm.UserError("ruling count does not match judged term count")
 
-        met_by_id = {}
         for r in rulings:
             if not isinstance(r, dict):
                 raise gl.vm.UserError("a ruling is not an object")
@@ -191,11 +260,11 @@ class Exhibit(gl.Contract):
                 raise gl.vm.UserError("duplicate ruling for a criterion")
             met_by_id[rid] = r["met"]
 
-        j = 0
-        while j < len(items):
-            if j not in met_by_id:
-                raise gl.vm.UserError("a criterion has no ruling")
-            j = j + 1
+        jj = 0
+        while jj < len(judged_ids):
+            if judged_ids[jj] not in met_by_id:
+                raise gl.vm.UserError("a judged term has no ruling")
+            jj = jj + 1
 
         unmet_texts = []
         k = 0
@@ -210,7 +279,14 @@ class Exhibit(gl.Contract):
         # the verdict final the instant it was reached. Holding the value and
         # requiring a separate release() call leaves room for a losing party to
         # contest a ruling before any money moves.
-        case["rulings"] = rulings
+        ruling_list = []
+        n = 0
+        while n < len(items):
+            ruling_list.append({"id": n, "met": met_by_id[n]})
+            n = n + 1
+
+        case["rulings"] = ruling_list
+        case["jury_convened"] = True
         case["unmet"] = unmet_texts
         case["approved"] = approved
 
@@ -339,6 +415,72 @@ class Exhibit(gl.Contract):
     @gl.public.view
     def list_cases(self) -> dict[str, str]:
         return {k: v for k, v in self.cases.items()}
+
+    def _kind_of(self, term: str) -> str:
+        """Return the mechanical kind of a term, or "" when it is judged."""
+        if term.startswith("contains:"):
+            return "contains"
+        if term.startswith("json_equals:"):
+            return "json_equals"
+        if term.startswith("json_exists:"):
+            return "json_exists"
+        if term.startswith("array_min:"):
+            return "array_min"
+        return ""
+
+    def _check(self, term: str, artifact: str) -> bool:
+        """Evaluate one mechanical term. Pure Python: every validator computes
+        the same answer from the same artifact."""
+        kind = self._kind_of(term)
+        arg = term[len(kind) + 1:].strip()
+
+        if kind == "contains":
+            return arg in artifact
+
+        parsed = json.loads(artifact)
+
+        if kind == "json_exists":
+            return self._path(parsed, arg) is not None
+
+        if kind == "json_equals":
+            parts = arg.split("=")
+            if len(parts) != 2:
+                return False
+            found = self._path(parsed, parts[0].strip())
+            return found is not None and str(found) == parts[1].strip()
+
+        if kind == "array_min":
+            parts = arg.split(">=")
+            if len(parts) != 2:
+                return False
+            found = self._path(parsed, parts[0].strip())
+            if not isinstance(found, list):
+                return False
+            return len(found) >= int(parts[1].strip())
+
+        return False
+
+    def _path(self, data, path: str):
+        """Walk a dotted path. None when any segment is missing, which callers
+        treat as an unmet term rather than an error."""
+        parts = path.split(".")
+        cur = data
+        i = 0
+        while i < len(parts):
+            key = parts[i]
+            if isinstance(cur, dict):
+                if key not in cur:
+                    return None
+                cur = cur[key]
+            elif isinstance(cur, list):
+                idx = int(key)
+                if idx < 0 or idx >= len(cur):
+                    return None
+                cur = cur[idx]
+            else:
+                return None
+            i = i + 1
+        return cur
 
     def _pins_a_revision(self, url: str) -> bool:
         parts = url.replace("?", "/").replace("=", "/").replace("&", "/").split("/")
