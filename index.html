@@ -1,0 +1,298 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Exhibit — an admissibility standard for agent disputes</title>
+<meta name="description" content="Agent-to-agent escrow where mechanical terms settle in deterministic code and only genuinely subjective terms reach a validator jury.">
+<style>
+:root{--bg:#F7F6F3;--fg:#1A1A18;--muted:#6B6A64;--card:#FFF;--line:#E4E2DB;--ok:#1D9E75;--no:#D85A30;--wait:#BA7517;--accent:#1A1A18}
+@media(prefers-color-scheme:dark){:root{--bg:#131312;--fg:#F1EFE8;--muted:#8E8D86;--card:#1E1E1C;--line:#2E2E2B;--accent:#F1EFE8}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);font:15px/1.65 -apple-system,BlinkMacSystemFont,"Segoe UI",Inter,sans-serif}
+.wrap{max-width:880px;margin:0 auto;padding:0 20px}
+.hero{padding:72px 0 48px;border-bottom:1px solid var(--line)}
+.hero h1{font-size:40px;line-height:1.1;font-weight:600;margin:0 0 16px;letter-spacing:-0.02em}
+.hero .lede{font-size:19px;line-height:1.55;color:var(--muted);margin:0 0 28px;max-width:640px}
+.hero .lede strong{color:var(--fg);font-weight:500}
+.chips{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:28px}
+.chip{font-size:12px;padding:4px 11px;border-radius:20px;border:1px solid var(--line);color:var(--muted)}
+.cta{display:flex;gap:12px;flex-wrap:wrap}
+.cta a{display:inline-block;padding:10px 18px;border-radius:8px;font-size:14px;font-weight:500;text-decoration:none}
+.cta a.primary{background:var(--accent);color:var(--bg)}
+.cta a.ghost{border:1px solid var(--line);color:var(--fg)}
+section{padding:52px 0;border-bottom:1px solid var(--line)}
+section h2{font-size:13px;font-weight:600;letter-spacing:0.08em;text-transform:uppercase;color:var(--muted);margin:0 0 20px}
+section h3{font-size:22px;font-weight:500;margin:0 0 12px;letter-spacing:-0.01em}
+section p{margin:0 0 14px;max-width:660px}
+section p.sub{color:var(--muted)}
+.quote{border-left:2px solid var(--line);padding:2px 0 2px 16px;margin:20px 0;color:var(--muted);font-size:15px}
+.quote strong{color:var(--fg);font-weight:500}
+pre{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:16px;overflow:auto;font:13px/1.7 ui-monospace,SFMono-Regular,Menlo,monospace;margin:16px 0}
+pre .j{color:var(--wait)}
+table{width:100%;border-collapse:collapse;font-size:13.5px;margin-top:8px}
+th{text-align:left;font-weight:500;color:var(--muted);font-size:12px;text-transform:uppercase;letter-spacing:0.05em;padding:0 12px 10px 0}
+td{padding:10px 12px 10px 0;border-top:1px solid var(--line);vertical-align:top}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:8px}
+@media(max-width:760px){.grid2{grid-template-columns:1fr}}
+.feat{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:18px}
+.feat h4{font-size:15px;font-weight:500;margin:0 0 8px}
+.feat p{font-size:13.5px;color:var(--muted);margin:0;line-height:1.6}
+code,.mono{font:12.5px/1.5 ui-monospace,SFMono-Regular,Menlo,monospace;word-break:break-all}
+#app{padding:52px 0 80px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:20px;margin-bottom:16px}
+.card h3{font-size:15px;font-weight:500;margin:0 0 14px}
+label{display:block;font-size:13px;color:var(--muted);margin:12px 0 4px}
+input,select{width:100%;background:var(--bg);color:var(--fg);border:1px solid var(--line);border-radius:8px;padding:9px 11px;font:inherit;font-size:14px}
+button{background:var(--accent);color:var(--bg);border:0;border-radius:8px;padding:9px 16px;font:inherit;font-size:14px;font-weight:500;cursor:pointer;margin-top:14px}
+button.ghost{background:none;color:var(--fg);border:1px solid var(--line)}
+.pill{display:inline-block;font-size:12px;padding:2px 9px;border-radius:20px;border:1px solid var(--line);color:var(--muted)}
+.pill.RULED,.pill.SETTLED{color:var(--ok);border-color:var(--ok)}
+.pill.INADMISSIBLE{color:var(--no);border-color:var(--no)}
+.pill.OPEN,.pill.SUBMITTED{color:var(--wait);border-color:var(--wait)}
+.b{border-top:1px solid var(--line);padding:14px 0}
+.b:first-of-type{border-top:0}
+.b h4{font-size:14px;font-weight:500;margin:0 0 6px;display:flex;gap:10px;align-items:center}
+.b p{margin:4px 0;font-size:13px;color:var(--muted);word-break:break-word}
+.tag{font-size:11px;padding:1px 7px;border-radius:4px;border:1px solid var(--line);color:var(--muted);margin-left:6px}
+.rul{margin-top:10px;border:1px solid var(--line);border-radius:8px;overflow:hidden}
+.rul div{display:flex;gap:10px;padding:7px 11px;font-size:13px;border-top:1px solid var(--line);align-items:center}
+.rul div:first-child{border-top:0}
+.rul .y{color:var(--ok)}
+.rul .n{color:var(--no)}
+.v{font-size:13px;margin-top:8px;padding:9px 11px;border-radius:8px;background:var(--bg);border:1px solid var(--line)}
+.log{font:12px/1.7 ui-monospace,SFMono-Regular,Menlo,monospace;color:var(--muted);white-space:pre-wrap;max-height:200px;overflow:auto}
+.bar{display:flex;align-items:center;gap:10px;font-size:13px;color:var(--muted);flex-wrap:wrap}
+.note{font-size:12px;color:var(--muted);margin-top:8px;line-height:1.5}
+footer{padding:28px 0 60px;color:var(--muted);font-size:13px}
+footer a{color:var(--muted)}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<div class="hero">
+  <svg width="54" height="54" viewBox="0 0 48 48" style="display:block;margin-bottom:22px;color:var(--fg)" aria-hidden="true">
+    <g fill="currentColor">
+      <rect x="8" y="10" width="14" height="3" rx="1.5"/>
+      <rect x="8" y="17" width="14" height="3" rx="1.5" opacity="0.75"/>
+      <rect x="8" y="24" width="14" height="3" rx="1.5" opacity="0.5"/>
+      <circle cx="33" cy="11.5" r="3"/>
+      <circle cx="33" cy="18.5" r="3" opacity="0.75"/>
+      <circle cx="33" cy="25.5" r="3" opacity="0.5"/>
+      <path d="M14 34l6 6 14-14" fill="none" stroke="currentColor" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"/>
+    </g>
+  </svg>
+  <h1>Most terms don't need a jury.</h1>
+  <p class="lede">Exhibit is escrow for agents trading with agents. Terms that can be <strong>decided</strong> — a field exists, an array has ten entries, a status equals ok — settle in deterministic code. Only genuinely subjective terms reach a validator jury. <strong>A cheap check gates the expensive one.</strong></p>
+  <div class="chips">
+    <span class="chip">Onchain Justice</span>
+    <span class="chip">Machine-readable terms</span>
+    <span class="chip">Escrowed settlement</span>
+    <span class="chip">Contestable verdicts</span>
+  </div>
+  <div class="cta">
+    <a class="primary" href="#app">Open the registry</a>
+    <a class="ghost" href="https://github.com/Makabeez/exhibit">Source</a>
+    <a class="ghost" href="https://explorer-bradbury.genlayer.com/address/0xa5bD1ff37eCFD280F4CBdA73576DA7c86DB2D275">Contract</a>
+  </div>
+</div>
+
+<section>
+  <h2>Why not just ask the jury</h2>
+  <h3>An LLM jury can be unanimously wrong.</h3>
+  <p class="sub">In a controlled study on this same network, five validators reached unanimous agreement on three answers that were false. They were not malfunctioning — they were correctly reading a truncated artifact that never contained the file list the claims referred to.</p>
+  <div class="quote"><strong>Consensus guarantees agreement, not truth.</strong> The fetch layer decides which one you get, and only the first is reported on chain.</div>
+  <p class="sub">A settlement layer for agent commerce cannot treat that as an edge case. So Exhibit takes work away from the jury wherever the question is decidable, and refuses to rule at all when the evidence is incomplete.</p>
+</section>
+
+<section>
+  <h2>Two classes of term</h2>
+  <p class="sub">The buyer commits to terms before any work starts. A term with a kind prefix is mechanical. Anything else is judged.</p>
+<pre>contains: Cargo.toml
+json_equals: status = ok
+json_exists: data.items
+array_min: results &gt;= 10
+<span class="j">the summary accurately describes the linked article    &larr; judged</span></pre>
+  <div class="grid2">
+    <div class="feat">
+      <h4>Mechanical — decided in code</h4>
+      <p>Evaluated in deterministic Python after a single consensus fetch. Every validator computes the same answer from the same bytes. No LLM, no variance, and structurally unable to be unanimously wrong.</p>
+    </div>
+    <div class="feat">
+      <h4>Judged — decided by the jury</h4>
+      <p>One boolean per term, and every validator must agree on every one. Reserved for questions that genuinely require reading rather than checking.</p>
+    </div>
+  </div>
+  <p class="note">Mechanical terms run first. If one fails, the deliverable is out of spec on a fact and the jury is never convened.</p>
+</section>
+
+<section>
+  <h2>Measured on Bradbury</h2>
+  <p class="sub">Four cases, one contract, one artifact, same wallet.</p>
+  <table>
+    <tr><th>Case</th><th>Terms</th><th>Jury</th><th>Settlement</th></tr>
+    <tr><td class="mono">json-1</td><td>array_min + json_exists</td><td>no</td><td><strong>1.7 min</strong></td></tr>
+    <tr><td class="mono">gate-1</td><td>failing contains + judged</td><td>no</td><td><strong>3.6 min</strong></td></tr>
+    <tr><td class="mono">mix-1</td><td>passing contains + judged</td><td><strong>yes</strong></td><td><strong>9.6 min</strong></td></tr>
+    <tr><td class="mono">mech-1</td><td>two contains</td><td>no</td><td>—</td></tr>
+  </table>
+  <p class="note" style="margin-top:16px"><strong>gate-1 is the point.</strong> It carries a judged term, but its mechanical term fails — so no jury runs. The deliverable is out of spec on a fact, and no amount of judgment changes that.</p>
+  <p class="note">Single runs, not averages. The mechanism is verified; the exact multiple would need repetition to state firmly.</p>
+</section>
+
+<section>
+  <h2>How it is built</h2>
+  <div class="grid2">
+    <div class="feat">
+      <h4>The artifact must be pinned</h4>
+      <p>A URL without a 40-character commit SHA is refused. A branch reference can be rewritten between delivery and settlement — and the seller controls the endpoint the contract reads.</p>
+    </div>
+    <div class="feat">
+      <h4>It refuses a partial view</h4>
+      <p>If the fetch fills the character window the artifact was almost certainly truncated. The contract returns INADMISSIBLE and holds the escrow rather than ruling on evidence it cannot see the end of.</p>
+    </div>
+    <div class="feat">
+      <h4>The ruling holds the money</h4>
+      <p>Settlement does not pay out. The escrow is held so the losing party can stake a bond equal to it and have a fresh jury rule on the same pinned artifact.</p>
+    </div>
+    <div class="feat">
+      <h4>Untrusted evidence, treated as such</h4>
+      <p>The artifact decides whether the seller gets paid. The ruling prompt states that anything inside it — instructions, role-play, claims of authority — is data to be judged, never instructions to follow.</p>
+    </div>
+  </div>
+</section>
+
+</div>
+
+<div class="wrap" id="app">
+  <h2 style="font-size:13px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);margin:0 0 6px">Live registry</h2>
+  <h3 style="font-size:22px;font-weight:500;margin:0 0 6px">Read the contract</h3>
+  <p class="note" style="margin:0 0 20px;max-width:640px">Live on GenLayer Bradbury. Cases load automatically with their terms and per-term rulings — mechanical terms are marked <span class="tag">code</span>, judged terms <span class="tag">jury</span>.</p>
+
+  <div class="card">
+    <div class="bar" style="justify-content:space-between">
+      <span id="net">not connected</span>
+      <span class="bar">
+        <select id="wsel"><option>detecting…</option></select>
+        <button class="ghost" id="conn" style="margin:0">Connect</button>
+      </span>
+    </div>
+  </div>
+
+  <div class="card">
+    <h3>Registry</h3>
+    <label>Contract address</label>
+    <input id="addr" value="0xa5bD1ff37eCFD280F4CBdA73576DA7c86DB2D275" spellcheck="false">
+    <button id="load">Load registry</button>
+    <div class="bar" style="margin-top:12px"><span id="reg">—</span></div>
+  </div>
+
+  <div class="card">
+    <h3>Cases <button class="ghost" id="refresh" style="margin:0;padding:4px 10px;font-size:12px;float:right">Refresh</button></h3>
+    <div id="list"><p class="note" style="margin:0">Loading…</p></div>
+  </div>
+
+  <div class="card">
+    <h3>Activity</h3>
+    <div class="log" id="log">ready</div>
+  </div>
+</div>
+
+<div class="wrap"><footer>
+  Exhibit · <a href="https://github.com/Makabeez/exhibit">source</a> ·
+  <a href="https://explorer-bradbury.genlayer.com/address/0xa5bD1ff37eCFD280F4CBdA73576DA7c86DB2D275">contract</a> ·
+  built on <a href="https://genlayer.com">GenLayer</a> · MIT
+</footer></div>
+
+<script type="module">
+import { createClient } from "https://esm.sh/genlayer-js@latest";
+import { testnetBradbury } from "https://esm.sh/genlayer-js@latest/chains";
+
+const $ = id => document.getElementById(id);
+const log = m => { $("log").textContent = new Date().toLocaleTimeString() + "  " + m + "\n" + $("log").textContent; };
+const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+const KINDS = ["contains:", "json_equals:", "json_exists:", "array_min:"];
+const isMech = t => KINDS.some(k => String(t).startsWith(k));
+
+const readClient = createClient({ chain: testnetBradbury });
+let writeClient = null, account = null, contract = null;
+
+const wallets = new Map();
+function renderWallets() {
+  const f = [...wallets.values()];
+  $("wsel").innerHTML = f.length
+    ? f.map(w => `<option value="${esc(w.info.uuid)}">${esc(w.info.name)}</option>`).join("")
+    : (window.ethereum ? '<option value="legacy">injected</option>' : "<option>no wallet</option>");
+}
+window.addEventListener("eip6963:announceProvider", e => {
+  if (!wallets.has(e.detail.info.uuid)) { wallets.set(e.detail.info.uuid, e.detail); renderWallets(); }
+});
+window.dispatchEvent(new Event("eip6963:requestProvider"));
+setTimeout(renderWallets, 400);
+
+$("conn").onclick = async () => {
+  const v = $("wsel").value;
+  const p = (v && wallets.has(v)) ? wallets.get(v).provider : window.ethereum;
+  if (!p) return log("no wallet available");
+  try {
+    const [a] = await p.request({ method: "eth_requestAccounts" });
+    account = a;
+    writeClient = createClient({ chain: testnetBradbury, account: a, provider: p });
+    try { await writeClient.connect("testnetBradbury"); }
+    catch (e) { log("chain switch skipped: " + (e.message || e)); }
+    $("conn").textContent = "Connected";
+    $("net").textContent = a.slice(0, 6) + "…" + a.slice(-4);
+    log("connected " + a);
+  } catch (e) { log("connect failed: " + (e.message || e)); }
+};
+
+async function loadRegistry() {
+  const a = $("addr").value.trim();
+  if (!a.startsWith("0x")) return log("enter a contract address");
+  contract = a;
+  try {
+    const name = await readClient.readContract({ address: contract, functionName: "get_registry_name", args: [] });
+    $("reg").innerHTML = esc(name) + ' <span class="mono">' + esc(a) + "</span>";
+    log("loaded registry: " + name);
+    refresh();
+  } catch (e) { log("load failed: " + (e.message || e)); }
+}
+$("load").onclick = loadRegistry;
+$("refresh").onclick = () => refresh();
+
+async function refresh() {
+  if (!contract) return;
+  try {
+    const all = await readClient.readContract({ address: contract, functionName: "list_cases", args: [] });
+    const entries = Object.entries(all || {});
+    if (!entries.length) { $("list").innerHTML = '<p class="note" style="margin:0">No cases yet.</p>'; return; }
+    $("list").innerHTML = entries.reverse().map(([id, raw]) => {
+      const b = JSON.parse(raw);
+      const terms = Array.isArray(b.terms) ? b.terms : [b.terms];
+      const rulings = Array.isArray(b.rulings) ? b.rulings : [];
+      return `<div class="b">
+        <h4>${esc(id)} <span class="pill ${esc(b.status)}">${esc(b.status)}</span>
+          ${b.jury_convened ? '<span class="tag">jury convened</span>' : '<span class="tag">no jury</span>'}</h4>
+        <p>${esc(b.brief)}</p>
+        ${b.artifact_url ? `<p><strong>Artifact:</strong> ${esc(b.artifact_url)}</p>` : ""}
+        ${rulings.length ? `<div class="rul">${rulings.map(r => {
+          const term = terms[r.id] ?? ("term " + r.id);
+          return `<div><span class="${r.met ? "y" : "n"}">${r.met ? "✓" : "✗"}</span>
+            <span class="mono">${esc(term)}</span>
+            <span class="tag" style="margin-left:auto">${isMech(term) ? "code" : "jury"}</span></div>`;
+        }).join("")}</div>`
+        : `<div class="rul">${terms.map(t =>
+            `<div><span style="color:var(--muted)">·</span><span class="mono">${esc(t)}</span>
+             <span class="tag" style="margin-left:auto">${isMech(t) ? "code" : "jury"}</span></div>`).join("")}</div>`}
+        ${b.verdict ? `<div class="v">${esc(b.verdict)}</div>` : ""}
+        ${b.settlement ? `<p><strong>Settlement:</strong> ${esc(b.settlement)}</p>` : ""}
+      </div>`;
+    }).join("");
+  } catch (e) { log("refresh failed: " + (e.message || e)); }
+}
+
+loadRegistry();
+</script>
+</body>
+</html>
