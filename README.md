@@ -8,7 +8,11 @@ An admissibility standard for evidence in agent-to-agent disputes.
 
 Two agents transact. One escrows payment, the other delivers. Somebody has to decide whether the deliverable met the terms.
 
-The obvious answer is to ask an LLM jury. It is also the wrong answer for most terms, because **an LLM jury can be unanimously wrong**. In a [controlled study](https://github.com/Makabeez/webclaims) on this same network, five validators reached unanimous agreement on three answers that were false — they were correctly reading a truncated artifact that never contained the file list the claims referred to. Consensus guarantees agreement, not truth.
+The obvious answer is to ask an LLM jury. It is also the wrong answer for most terms, for two reasons we measured rather than assumed.
+
+**A jury can be unanimously wrong.** In a [controlled study](https://github.com/Makabeez/webclaims) on this same network, five validators reached unanimous agreement on three answers that were false — they were correctly reading a truncated artifact that never contained the file list the claims referred to. Consensus guarantees agreement, not truth.
+
+**A jury often reaches no verdict at all.** Running the same judged term three times on the same artifact, only one settled. The other two finalized with `NO_MAJORITY` and `DISAGREE` — nothing decided, nothing paid, escrow stuck.
 
 Exhibit's position: **most terms in an agent contract do not need judgment at all.** Whether a response contains a field, whether an array has ten entries, whether a status equals `ok` — these are decidable. Only the genuinely subjective ones need a jury.
 
@@ -34,22 +38,45 @@ Mechanical terms are evaluated **first**. If any fails, the deliverable is alrea
 
 ## Measured on Bradbury
 
-Four cases, one contract, one artifact, same wallet.
+Six cases, one contract, one artifact, identical terms within each group. The only variable is whether the terms are mechanical or judged.
 
-| Case | Terms | Jury convened | Settlement |
+| Group | Terms | Settled on first attempt |
+| --- | --- | --- |
+| Mechanical | `contains: web_claims.py` + `contains: README.md` | **3 of 3** |
+| Judged | `contains: web_claims.py` + *"the artifact lists a Rust project"* | **1 of 3** |
+
+The two judged failures took different routes and neither wrote any state:
+
+| Case | Outcome |
+| --- | --- |
+| `J1` | jury agreed, case `RULED` |
+| `J2` | `FINALIZED / NO_MAJORITY` — the jury never reached a majority |
+| `J3` | `UNDETERMINED / DISAGREE` — validators returned different booleans |
+
+Both cases remain stuck at `SUBMITTED` with the escrow held. Nothing was decided and nothing was paid.
+
+**This is the argument for the design.** A jury is a scarce and unreliable resource: it costs an LLM round per validator, it can be [unanimously wrong](https://github.com/Makabeez/webclaims), and on this evidence it fails to produce a verdict a substantial fraction of the time. Every term moved from judged to mechanical is a term that cannot fail either way.
+
+Exhibit does not claim LLM juries are the wrong tool. It claims they are the *expensive* tool, and that most terms in an agent contract never needed one.
+
+### Earlier single-case runs
+
+Four cases covering all four mechanical kinds, with wall-clock settlement times:
+
+| Case | Terms | Jury | Settlement |
 | --- | --- | --- | --- |
-| `json-1` | `array_min` + `json_exists` | no | **1.7 min** |
-| `gate-1` | failing `contains` + judged term | no | **3.6 min** |
-| `mix-1` | passing `contains` + judged term | **yes** | **9.6 min** |
+| `json-1` | `array_min` + `json_exists` | no | 1.7 min |
+| `gate-1` | failing `contains` + judged | no | 3.6 min |
+| `mix-1` | passing `contains` + judged | yes | 9.6 min |
 | `mech-1` | two `contains` | no | — |
 
-`gate-1` is the point of the design. It carries a judged term, but its mechanical term fails, so no jury runs — the deliverable is out of spec on a fact, and no amount of LLM judgment changes that.
+`gate-1` is the gate working: it carries a judged term, but its mechanical term fails, so no jury runs. The deliverable is out of spec on a fact.
 
-`json-1` exercised path-walking against live GitHub API JSON: `array_min: 0.name >= 1` correctly returned false (`name` is a string, not a list) and `json_exists: 0.sha` correctly returned true.
+`json-1` exercised path-walking against live GitHub API JSON — `array_min: 0.name >= 1` correctly false (`name` is a string, not a list), `json_exists: 0.sha` correctly true.
 
-`mix-1` is the comparison case: mechanical term passes, so the jury does convene, and it ruled correctly — the artifact does contain `web_claims.py` and does not describe a Rust project.
+`mix-1` ruled correctly on both halves: the artifact does contain `web_claims.py` and does not describe a Rust project. It also required a retry after finishing `NOT_VOTED` on the first attempt.
 
-Single runs, not averages. The direction is clear and the mechanism is verified; the exact multiple would need repetition to state firmly.
+Timings are wall-clock from submission and single runs, so treat them as indicative. The settlement-rate result above is the one that replicates.
 
 ## Lifecycle
 
