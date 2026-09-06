@@ -84,7 +84,7 @@ footer a{color:var(--muted)}
     </g>
   </svg>
   <h1>Most terms don't need a jury.</h1>
-  <p class="lede">Exhibit is escrow for agents trading with agents. Terms that can be <strong>decided</strong> — a field exists, an array has ten entries, a status equals ok — settle in deterministic code. Only genuinely subjective terms reach a validator jury. <strong>A cheap check gates the expensive one.</strong></p>
+  <p class="lede">Exhibit is escrow for agents trading with agents. Terms that can be <strong>decided</strong> — a field exists, an array has ten entries, a status equals ok — settle in deterministic code. Only genuinely subjective terms reach a validator jury. In our runs mechanical terms settled <strong>3 of 3</strong> times; the same case sent to a jury settled <strong>1 of 3</strong>.</p>
   <div class="chips">
     <span class="chip">Onchain Justice</span>
     <span class="chip">Machine-readable terms</span>
@@ -103,7 +103,8 @@ footer a{color:var(--muted)}
   <h3>An LLM jury can be unanimously wrong.</h3>
   <p class="sub">In a controlled study on this same network, five validators reached unanimous agreement on three answers that were false. They were not malfunctioning — they were correctly reading a truncated artifact that never contained the file list the claims referred to.</p>
   <div class="quote"><strong>Consensus guarantees agreement, not truth.</strong> The fetch layer decides which one you get, and only the first is reported on chain.</div>
-  <p class="sub">A settlement layer for agent commerce cannot treat that as an edge case. So Exhibit takes work away from the jury wherever the question is decidable, and refuses to rule at all when the evidence is incomplete.</p>
+  <p class="sub">And when it is not wrong, it often reaches no verdict at all. Running one judged term three times on the same artifact, two attempts finalized with <span class="mono">NO_MAJORITY</span> and <span class="mono">DISAGREE</span> — nothing decided, nothing paid, escrow stuck.</p>
+  <p class="sub">A settlement layer for agent commerce cannot treat either as an edge case. So Exhibit takes work away from the jury wherever the question is decidable, and refuses to rule at all when the evidence is incomplete.</p>
 </section>
 
 <section>
@@ -129,16 +130,36 @@ array_min: results &gt;= 10
 
 <section>
   <h2>Measured on Bradbury</h2>
-  <p class="sub">Four cases, one contract, one artifact, same wallet.</p>
+  <h3>The same term, three times, on the same artifact.</h3>
+  <p class="sub">Six cases, one contract, one artifact. Terms are identical within each group. The only variable is whether they are mechanical or judged.</p>
+  <table>
+    <tr><th>Group</th><th>Terms</th><th>Settled first attempt</th></tr>
+    <tr><td>Mechanical</td><td class="mono">contains: web_claims.py + contains: README.md</td><td><strong>3 of 3</strong></td></tr>
+    <tr><td>Judged</td><td class="mono">contains: web_claims.py + "the artifact lists a Rust project"</td><td><strong>1 of 3</strong></td></tr>
+  </table>
+  <p class="sub" style="margin-top:20px">The two judged failures took different routes, and neither wrote any state:</p>
+  <table>
+    <tr><th>Case</th><th>Outcome</th></tr>
+    <tr><td class="mono">J1</td><td>jury agreed, case RULED</td></tr>
+    <tr><td class="mono">J2</td><td><span style="color:var(--no)">FINALIZED / NO_MAJORITY</span> — the jury never reached a majority</td></tr>
+    <tr><td class="mono">J3</td><td><span style="color:var(--no)">UNDETERMINED / DISAGREE</span> — validators returned different booleans</td></tr>
+  </table>
+  <div class="quote" style="margin-top:24px"><strong>A jury is a scarce and unreliable resource.</strong> It costs an LLM round per validator, it can be unanimously wrong, and on this evidence it fails to produce a verdict a substantial fraction of the time. Every term moved from judged to mechanical is a term that cannot fail either way.</div>
+  <p class="note">Exhibit does not claim LLM juries are the wrong tool. It claims they are the expensive one, and that most terms in an agent contract never needed a jury at all.</p>
+</section>
+
+<section>
+  <h2>Earlier single-case runs</h2>
+  <p class="sub">Four cases covering all four mechanical kinds, with wall-clock settlement times.</p>
   <table>
     <tr><th>Case</th><th>Terms</th><th>Jury</th><th>Settlement</th></tr>
-    <tr><td class="mono">json-1</td><td>array_min + json_exists</td><td>no</td><td><strong>1.7 min</strong></td></tr>
-    <tr><td class="mono">gate-1</td><td>failing contains + judged</td><td>no</td><td><strong>3.6 min</strong></td></tr>
-    <tr><td class="mono">mix-1</td><td>passing contains + judged</td><td><strong>yes</strong></td><td><strong>9.6 min</strong></td></tr>
+    <tr><td class="mono">json-1</td><td>array_min + json_exists</td><td>no</td><td>1.7 min</td></tr>
+    <tr><td class="mono">gate-1</td><td>failing contains + judged</td><td>no</td><td>3.6 min</td></tr>
+    <tr><td class="mono">mix-1</td><td>passing contains + judged</td><td><strong>yes</strong></td><td>9.6 min</td></tr>
     <tr><td class="mono">mech-1</td><td>two contains</td><td>no</td><td>—</td></tr>
   </table>
-  <p class="note" style="margin-top:16px"><strong>gate-1 is the point.</strong> It carries a judged term, but its mechanical term fails — so no jury runs. The deliverable is out of spec on a fact, and no amount of judgment changes that.</p>
-  <p class="note">Single runs, not averages. The mechanism is verified; the exact multiple would need repetition to state firmly.</p>
+  <p class="note" style="margin-top:16px"><strong>gate-1 is the gate working.</strong> It carries a judged term, but its mechanical term fails — so no jury runs. The deliverable is out of spec on a fact, and no amount of judgment changes that.</p>
+  <p class="note">json-1 exercised path-walking against live GitHub API JSON: <code>array_min: 0.name &gt;= 1</code> correctly false, <code>json_exists: 0.sha</code> correctly true. Timings are single runs — indicative, not averages. The settlement-rate result above is the one that replicates.</p>
 </section>
 
 <section>
