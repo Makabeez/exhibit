@@ -111,7 +111,7 @@ class Exhibit(gl.Contract):
         numbered_lines = []
         j = 0
         while j < len(judged_ids):
-            numbered_lines.append(str(judged_ids[j]) + ". " + items[judged_ids[j]])
+            numbered_lines.append(str(j) + ". " + items[judged_ids[j]])
             j = j + 1
         numbered = "\n".join(numbered_lines)
 
@@ -242,6 +242,7 @@ class Exhibit(gl.Contract):
         if len(rulings) != len(judged_ids):
             raise gl.vm.UserError("ruling count does not match judged term count")
 
+        seen_slots = {}
         for r in rulings:
             if not isinstance(r, dict):
                 raise gl.vm.UserError("a ruling is not an object")
@@ -254,11 +255,12 @@ class Exhibit(gl.Contract):
             rid = r["id"]
             if not isinstance(rid, int):
                 raise gl.vm.UserError("a ruling id is not an integer")
-            if rid < 0 or rid >= len(items):
+            if rid < 0 or rid >= len(judged_ids):
                 raise gl.vm.UserError("a ruling id is out of range")
-            if rid in met_by_id:
-                raise gl.vm.UserError("duplicate ruling for a criterion")
-            met_by_id[rid] = r["met"]
+            if rid in seen_slots:
+                raise gl.vm.UserError("duplicate ruling for a term")
+            seen_slots[rid] = True
+            met_by_id[judged_ids[rid]] = r["met"]
 
         jj = 0
         while jj < len(judged_ids):
