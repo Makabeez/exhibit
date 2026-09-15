@@ -14,6 +14,8 @@ The obvious answer is to ask an LLM jury. It is also the wrong answer for most t
 
 **A jury often reaches no verdict at all.** Running the same judged term three times on the same artifact, only one settled. The other two finalized with `NO_MAJORITY` and `DISAGREE` — nothing decided, nothing paid, escrow stuck.
 
+**And every dependency on model output is a liability.** A later run showed this contract's own settlement breaking because it asked the jury to echo a term index back, and the model renumbered from zero. Details below.
+
 Exhibit's position: **most terms in an agent contract do not need judgment at all.** Whether a response contains a field, whether an array has ten entries, whether a status equals `ok` — these are decidable. Only the genuinely subjective ones need a jury.
 
 So Exhibit splits the terms.
@@ -38,26 +40,50 @@ Mechanical terms are evaluated **first**. If any fails, the deliverable is alrea
 
 ## Measured on Bradbury
 
-Six cases, one contract, one artifact, identical terms within each group. The only variable is whether the terms are mechanical or judged.
+Two runs, one contract, one artifact, identical terms within each group. Both runs produced a failure — one in the jury, one in this contract's own code — and they argue the same thing.
 
-| Group | Terms | Settled on first attempt |
+### Run one: the jury does not always reach a verdict
+
+Three mechanical cases and three judged cases, identical terms within each group.
+
+| Group | Terms | Settled |
 | --- | --- | --- |
 | Mechanical | `contains: web_claims.py` + `contains: README.md` | **3 of 3** |
 | Judged | `contains: web_claims.py` + *"the artifact lists a Rust project"* | **1 of 3** |
 
-The two judged failures took different routes and neither wrote any state:
+The two judged failures took different routes and neither wrote state:
 
 | Case | Outcome |
 | --- | --- |
 | `J1` | jury agreed, case `RULED` |
-| `J2` | `FINALIZED / NO_MAJORITY` — the jury never reached a majority |
+| `J2` | `FINALIZED / NO_MAJORITY` — no majority was reached |
 | `J3` | `UNDETERMINED / DISAGREE` — validators returned different booleans |
 
-Both cases remain stuck at `SUBMITTED` with the escrow held. Nothing was decided and nothing was paid.
+Both remain at `SUBMITTED` with the escrow held. Nothing decided, nothing paid.
 
-**This is the argument for the design.** A jury is a scarce and unreliable resource: it costs an LLM round per validator, it can be [unanimously wrong](https://github.com/Makabeez/webclaims), and on this evidence it fails to produce a verdict a substantial fraction of the time. Every term moved from judged to mechanical is a term that cannot fail either way.
+### Run two: a bug in this contract, caught by its own validation
 
-Exhibit does not claim LLM juries are the wrong tool. It claims they are the *expensive* tool, and that most terms in an agent contract never needed one.
+Three more judged cases, all three reverted with `FINISHED_WITH_ERROR`. The cause was not the jury — it was how this contract talked to it.
+
+The prompt numbered judged terms by their **original index** in the term list. With one judged term sitting at index 1, the jury was asked about term `1` and answered:
+
+```json
+{"rulings": [{"id": 0, "met": false}]}
+```
+
+It renumbered from zero, which is the obvious thing to do when shown a single item. Validation found no ruling for term 1 and refused the settlement.
+
+Earlier cases had succeeded only because the model happened to echo the index back correctly. **The contract's correctness depended on an LLM preserving a non-contiguous numbering** — and eventually it didn't.
+
+The strict validation layer did exactly what it exists for: the output was well-formed JSON with a plausible boolean, and it still refused to move money on it. Three reverts, zero mis-settlements, escrow untouched in every case.
+
+The [fix](https://github.com/Makabeez/exhibit/commit/4fac692) numbers judged terms `0..n-1` in the prompt and maps them back to original indices in deterministic code. It is committed but not yet deployed — the Bradbury RPC currently rejects deploys of this contract's size with `gas limit too high`, so the live address runs the version that produced the results above.
+
+### What the two runs have in common
+
+> Anything that has to survive an LLM round trip is a liability. Run one is the jury failing to agree with itself; run two is this contract trusting a model to carry an index. The same discipline fixes both — decide in code whatever can be decided in code, and validate the rest before it touches value.
+
+That is the argument for mechanical terms, demonstrated once against the jury and once against our own design.
 
 ### Earlier single-case runs
 
@@ -74,9 +100,7 @@ Four cases covering all four mechanical kinds, with wall-clock settlement times:
 
 `json-1` exercised path-walking against live GitHub API JSON — `array_min: 0.name >= 1` correctly false (`name` is a string, not a list), `json_exists: 0.sha` correctly true.
 
-`mix-1` ruled correctly on both halves: the artifact does contain `web_claims.py` and does not describe a Rust project. It also required a retry after finishing `NOT_VOTED` on the first attempt.
-
-Timings are wall-clock from submission and single runs, so treat them as indicative. The settlement-rate result above is the one that replicates.
+Timings are single runs and wall-clock from submission. Treat them as indicative; the settlement-rate results above are the ones that replicate.
 
 ## Lifecycle
 
@@ -134,6 +158,7 @@ Undocumented behaviours found building this and its predecessor:
 - **A settle call can finalize with `NOT_VOTED`** — no committee picked it up, nothing applied. Seen three times across two contracts; resubmitting the identical call worked every time. For unattended agent-to-agent settlement this needs a retry loop.
 - **`rc.getBalance` and `waitForTransactionReceipt` are unreliable.** Poll `getTransaction` and read contract state.
 - **The RPC rate-limits bursts.** Three transactions in quick succession returned `transaction gas rate limit exceeded`. Space them.
+- **The RPC can refuse a deploy on size.** A 19.4 KB contract is currently rejected with `gas limit too high` where a 14.5 KB one deployed fine, with no client-side gas setting able to override it.
 - **Writing a contract from scratch is the slow path.** Three from-scratch deploys of this contract failed with no diagnostic and neither suspect proved to be the cause. A mechanical rename of an already-deployed contract, extended one step at a time, worked first try.
 
 ## Files
