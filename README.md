@@ -12,9 +12,9 @@ The obvious answer is to ask an LLM jury. It is also the wrong answer for most t
 
 **A jury can be unanimously wrong.** In a [controlled study](https://github.com/Makabeez/webclaims) on this same network, five validators reached unanimous agreement on three answers that were false — they were correctly reading a truncated artifact that never contained the file list the claims referred to. Consensus guarantees agreement, not truth.
 
-**A jury often reaches no verdict at all.** Running the same judged term three times on the same artifact, only one settled. The other two finalized with `NO_MAJORITY` and `DISAGREE` — nothing decided, nothing paid, escrow stuck.
+**A jury is the expensive tool.** It costs an LLM round per validator, adds minutes of latency, and its reliability varies by network — on one testnet the same judged term settled 1 time in 3, on another 3 times in 3. Measurements below, including the ones that contradict each other.
 
-**And every dependency on model output is a liability.** A later run showed this contract's own settlement breaking because it asked the jury to echo a term index back, and the model renumbered from zero. Details below.
+**And every dependency on model output is a liability.** One run showed this contract's own settlement breaking because it asked the jury to echo a term index back, and the model renumbered from zero.
 
 Exhibit's position: **most terms in an agent contract do not need judgment at all.** Whether a response contains a field, whether an array has ten entries, whether a status equals `ok` — these are decidable. Only the genuinely subjective ones need a jury.
 
@@ -38,56 +38,51 @@ the summary accurately describes the linked article     ← judged
 
 Mechanical terms are evaluated **first**. If any fails, the deliverable is already out of spec and the jury is never convened — a cheap deterministic check gates the expensive probabilistic one.
 
-## Measured on Bradbury
+## Measured
 
-Two runs, one contract, one artifact, identical terms within each group. Both runs produced a failure — one in the jury, one in this contract's own code — and they argue the same thing.
+Deployed twice, on two networks, with the same terms and the same pinned artifact. The three runs disagree with each other, and that disagreement is the most useful thing here.
 
-### Run one: the jury does not always reach a verdict
+**Live deployment: [`0x8379eb6c8425b561cf56AD5104911Ae860268001`](https://explorer-studio-dev.genlayer.com/address/0x8379eb6c8425b561cf56AD5104911Ae860268001) on Studio Next (chain 61997).**
 
-Three mechanical cases and three judged cases, identical terms within each group.
+### Run one, Bradbury: judged terms settled 1 of 3
 
-| Group | Terms | Settled |
-| --- | --- | --- |
-| Mechanical | `contains: web_claims.py` + `contains: README.md` | **3 of 3** |
-| Judged | `contains: web_claims.py` + *"the artifact lists a Rust project"* | **1 of 3** |
-
-The two judged failures took different routes and neither wrote state:
-
-| Case | Outcome |
+| Group | Settled |
 | --- | --- |
-| `J1` | jury agreed, case `RULED` |
-| `J2` | `FINALIZED / NO_MAJORITY` — no majority was reached |
-| `J3` | `UNDETERMINED / DISAGREE` — validators returned different booleans |
+| Mechanical | **3 of 3** |
+| Judged | **1 of 3** — one `NO_MAJORITY`, one `DISAGREE`, neither wrote state |
 
-Both remain at `SUBMITTED` with the escrow held. Nothing decided, nothing paid.
+### Run two, Bradbury: a bug in this contract, caught by its own validation
 
-### Run two: a bug in this contract, caught by its own validation
+Three further judged cases all reverted. Not the jury — the prompt numbered judged terms by their **original index**, so with one judged term at index 1 the jury was asked about term `1` and answered `{"id": 0, "met": false}`. It renumbered from zero, which is the obvious thing to do when shown a single item.
 
-Three more judged cases, all three reverted with `FINISHED_WITH_ERROR`. The cause was not the jury — it was how this contract talked to it.
+Earlier cases had succeeded only because the model happened to echo the index back. **The contract's correctness depended on an LLM preserving a non-contiguous numbering.** The strict validation layer refused the settlement rather than acting on it — three reverts, zero mis-settlements, escrow untouched. [Fixed](https://github.com/Makabeez/exhibit/commit/4fac692) by numbering `0..n-1` and mapping back in code.
 
-The prompt numbered judged terms by their **original index** in the term list. With one judged term sitting at index 1, the jury was asked about term `1` and answered:
+### Run three, Studio Next: judged terms settled 3 of 3
 
-```json
-{"rulings": [{"id": 0, "met": false}]}
-```
+The same six cases against the ported contract on a newer runtime with a fresh validator set:
 
-It renumbered from zero, which is the obvious thing to do when shown a single item. Validation found no ruling for term 1 and refused the settlement.
+| Group | Settled | Jury |
+| --- | --- | --- |
+| Mechanical | **3 of 3** | never convened |
+| Judged | **3 of 3** | convened on 2, gated out on 1 |
 
-Earlier cases had succeeded only because the model happened to echo the index back correctly. **The contract's correctness depended on an LLM preserving a non-contiguous numbering** — and eventually it didn't.
+**This contradicts run one, and the honest reading is that the 1-of-3 failure rate was a property of Bradbury, not of LLM juries.** Bradbury was a testnet being retired; it also produced repeated `NOT_VOTED` transactions where no committee picked up a call at all. We are not going to claim a general reliability finding from a network that was on its way out.
 
-The strict validation layer did exactly what it exists for: the output was well-formed JSON with a plausible boolean, and it still refused to move money on it. Three reverts, zero mis-settlements, escrow untouched in every case.
+What survives is narrower and still worth building around: a jury costs an LLM round per validator, adds minutes of latency, and its reliability is a property of the network you happen to be on. A mechanical term has none of those dependencies.
 
-The [fix](https://github.com/Makabeez/exhibit/commit/4fac692) numbers judged terms `0..n-1` in the prompt and maps them back to original indices in deterministic code. It is committed but not yet deployed — the Bradbury RPC currently rejects deploys of this contract's size with `gas limit too high`, so the live address runs the version that produced the results above.
+### The finding we did not expect
 
-### What the two runs have in common
+In run three, `sn-J3` evaluated `contains: web_claims.py` as **false** — against the same pinned, immutable URL where `sn-J1` and `sn-J2` had evaluated it **true** minutes earlier.
 
-> Anything that has to survive an LLM round trip is a liability. Run one is the jury failing to agree with itself; run two is this contract trusting a model to carry an index. The same discipline fixes both — decide in code whatever can be decided in code, and validate the rest before it touches value.
+The term is a substring check. The artifact is content-addressed. Neither can vary. What varied was the bytes the fetch returned: eighteen transactions in quick succession, five validators fetching per settle, against an unauthenticated API with a 60-requests-per-hour limit. A rate-limited response is still valid JSON — it just contains an error message instead of a file list, and `contains:` correctly reported the string was absent from it.
 
-That is the argument for mechanical terms, demonstrated once against the jury and once against our own design.
+> **A deterministic term is only as deterministic as the bytes it is given.** Mechanical evaluation removes jury variance. It does not tell "the file is absent" from "we were handed an error page instead of the artifact," and the contract settled a case against the wrong document without hesitating.
+
+This is the truncation problem at a different layer, and it points at the same fix: validate that the fetch *looks like* the expected artifact — expected key present, minimum size, no error shape — and return `INADMISSIBLE` otherwise, exactly as the window guard already does. Not yet implemented; it is the next thing to build.
 
 ### Earlier single-case runs
 
-Four cases covering all four mechanical kinds, with wall-clock settlement times:
+Four cases on Bradbury covering all four mechanical kinds, with wall-clock settlement times:
 
 | Case | Terms | Jury | Settlement |
 | --- | --- | --- | --- |
@@ -96,11 +91,7 @@ Four cases covering all four mechanical kinds, with wall-clock settlement times:
 | `mix-1` | passing `contains` + judged | yes | 9.6 min |
 | `mech-1` | two `contains` | no | — |
 
-`gate-1` is the gate working: it carries a judged term, but its mechanical term fails, so no jury runs. The deliverable is out of spec on a fact.
-
-`json-1` exercised path-walking against live GitHub API JSON — `array_min: 0.name >= 1` correctly false (`name` is a string, not a list), `json_exists: 0.sha` correctly true.
-
-Timings are single runs and wall-clock from submission. Treat them as indicative; the settlement-rate results above are the ones that replicate.
+`gate-1` is the gate working: it carries a judged term, but its mechanical term fails, so no jury runs. Timings are single runs — indicative, not averages.
 
 ## Lifecycle
 
@@ -149,6 +140,11 @@ genvm-lint schema exhibit.py
 Note that `genvm-lint` accepts several constructs GenVM rejects at deploy. See below.
 
 ## Notes for builders
+
+Porting from GenVM v0.2 to v0.6 (Studio Next) needed exactly three changes: `TreeMap` moved to `gl.storage.TreeMap`, `prompt_comparative` takes its principle **positionally** rather than as a keyword, and transfers go through a `@gl.evm.contract_interface` class instead of `gl.get_contract_at`. Everything else — `Address`, `gl.message`, payable decorators, dict returns, `UserError`, `gl.nondet.web.get`, `exec_prompt` — was unchanged.
+
+The fastest debugging tool on GenLayer is the `gen_getContractSchemaForCode` RPC method: POST a contract to it and it returns a real Python traceback with the failing line, in about a second, for free. It catches compile errors but not call-site errors inside method bodies — `prompt_comparative(fn, principle=...)` passes the schema check and reverts at runtime.
+
 
 Undocumented behaviours found building this and its predecessor:
 
