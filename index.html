@@ -94,7 +94,7 @@ footer a{color:var(--muted)}
   <div class="cta">
     <a class="primary" href="#app">Open the registry</a>
     <a class="ghost" href="https://github.com/Makabeez/exhibit">Source</a>
-    <a class="ghost" href="https://explorer-bradbury.genlayer.com/address/0xa5bD1ff37eCFD280F4CBdA73576DA7c86DB2D275">Contract</a>
+    <a class="ghost" href="https://explorer-studio-dev.genlayer.com/address/0x8379eb6c8425b561cf56AD5104911Ae860268001">Contract</a>
   </div>
 </div>
 
@@ -129,7 +129,7 @@ array_min: results &gt;= 10
 </section>
 
 <section>
-  <h2>Measured on Bradbury</h2>
+  <h2>Measured on Studio Next</h2>
   <h3>The same term, three times, on the same artifact.</h3>
   <p class="sub">Six cases, one contract, one artifact. Terms are identical within each group. The only variable is whether they are mechanical or judged.</p>
   <table>
@@ -189,7 +189,7 @@ array_min: results &gt;= 10
 <div class="wrap" id="app">
   <h2 style="font-size:13px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);margin:0 0 6px">Live registry</h2>
   <h3 style="font-size:22px;font-weight:500;margin:0 0 6px">Read the contract</h3>
-  <p class="note" style="margin:0 0 20px;max-width:640px">Live on GenLayer Bradbury. Cases load automatically with their terms and per-term rulings — mechanical terms are marked <span class="tag">code</span>, judged terms <span class="tag">jury</span>.</p>
+  <p class="note" style="margin:0 0 20px;max-width:640px">Live on GenLayer Studio Next (chain 61997). Cases load automatically with their terms and per-term rulings — mechanical terms are marked <span class="tag">code</span>, judged terms <span class="tag">jury</span>.</p>
 
   <div class="card">
     <div class="bar" style="justify-content:space-between">
@@ -204,7 +204,7 @@ array_min: results &gt;= 10
   <div class="card">
     <h3>Registry</h3>
     <label>Contract address</label>
-    <input id="addr" value="0xa5bD1ff37eCFD280F4CBdA73576DA7c86DB2D275" spellcheck="false">
+    <input id="addr" value="0x8379eb6c8425b561cf56AD5104911Ae860268001" spellcheck="false">
     <button id="load">Load registry</button>
     <div class="bar" style="margin-top:12px"><span id="reg">—</span></div>
   </div>
@@ -222,13 +222,13 @@ array_min: results &gt;= 10
 
 <div class="wrap"><footer>
   Exhibit · <a href="https://github.com/Makabeez/exhibit">source</a> ·
-  <a href="https://explorer-bradbury.genlayer.com/address/0xa5bD1ff37eCFD280F4CBdA73576DA7c86DB2D275">contract</a> ·
+  <a href="https://explorer-studio-dev.genlayer.com/address/0x8379eb6c8425b561cf56AD5104911Ae860268001">contract</a> ·
   built on <a href="https://genlayer.com">GenLayer</a> · MIT
 </footer></div>
 
 <script type="module">
-import { createClient } from "https://esm.sh/genlayer-js@latest";
-import { testnetBradbury } from "https://esm.sh/genlayer-js@latest/chains";
+import { createClient } from "https://esm.sh/genlayer-js@2.0.0-rc.1";
+import { studioDevnet } from "https://esm.sh/genlayer-js@2.0.0-rc.1/chains";
 
 const $ = id => document.getElementById(id);
 const log = m => { $("log").textContent = new Date().toLocaleTimeString() + "  " + m + "\n" + $("log").textContent; };
@@ -236,7 +236,7 @@ const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "
 const KINDS = ["contains:", "json_equals:", "json_exists:", "array_min:"];
 const isMech = t => KINDS.some(k => String(t).startsWith(k));
 
-const readClient = createClient({ chain: testnetBradbury });
+const readClient = createClient({ chain: studioDevnet });
 let writeClient = null, account = null, contract = null;
 
 const wallets = new Map();
@@ -252,15 +252,28 @@ window.addEventListener("eip6963:announceProvider", e => {
 window.dispatchEvent(new Event("eip6963:requestProvider"));
 setTimeout(renderWallets, 400);
 
+async function ensureChain(p) {
+  try {
+    await p.request({ method: 'wallet_addEthereumChain', params: [{
+      chainId: '0xf22d',
+      chainName: 'GenLayer Studio Next',
+      rpcUrls: ['https://studio-next.genlayer.com/api'],
+      nativeCurrency: { name: 'GEN', symbol: 'GEN', decimals: 18 },
+      blockExplorerUrls: ['https://explorer-studio-dev.genlayer.com']
+    }] });
+  } catch (e) { log('chain add skipped: ' + (e.message || e)); }
+}
+
 $("conn").onclick = async () => {
   const v = $("wsel").value;
   const p = (v && wallets.has(v)) ? wallets.get(v).provider : window.ethereum;
   if (!p) return log("no wallet available");
   try {
     const [a] = await p.request({ method: "eth_requestAccounts" });
+    await ensureChain(p);
     account = a;
-    writeClient = createClient({ chain: testnetBradbury, account: a, provider: p });
-    try { await writeClient.connect("testnetBradbury"); }
+    writeClient = createClient({ chain: studioDevnet, account: a, provider: p });
+    try { await writeClient.connect("studioDevnet"); }
     catch (e) { log("chain switch skipped: " + (e.message || e)); }
     $("conn").textContent = "Connected";
     $("net").textContent = a.slice(0, 6) + "…" + a.slice(-4);
