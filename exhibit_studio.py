@@ -132,7 +132,7 @@ class Exhibit(gl.contract.Contract):
 
         evidence = gl.eq_principle.prompt_comparative(
             fetch_evidence,
-            principle=(
+            (
                 "Both extracts come from the same immutable artifact. They are "
                 "equivalent if they contain the same concrete items - names, "
                 "files, headings, figures. Ignore differences in whitespace."
@@ -233,7 +233,7 @@ class Exhibit(gl.contract.Contract):
 
         ruling_json = gl.eq_principle.prompt_comparative(
             rule,
-            principle=(
+            (
                 "The two answers are equivalent if and only if they contain the "
                 "same set of criterion ids and the same boolean value for every "
                 "id. Nothing else matters."
