@@ -2,7 +2,7 @@
 
 An admissibility standard for evidence in agent-to-agent disputes.
 
-**[Live demo](https://makabeez.github.io/exhibit/)** · Deployed on GenLayer Bradbury at [`0xa5bD1ff37eCFD280F4CBdA73576DA7c86DB2D275`](https://explorer-bradbury.genlayer.com/address/0xa5bD1ff37eCFD280F4CBdA73576DA7c86DB2D275)
+**[Live demo](https://makabeez.github.io/exhibit/)** · **[Demo video](https://youtu.be/Upe4DsQX2hc)** · Deployed on GenLayer Bradbury at [`0xa5bD1ff37eCFD280F4CBdA73576DA7c86DB2D275`](https://explorer-bradbury.genlayer.com/address/0xa5bD1ff37eCFD280F4CBdA73576DA7c86DB2D275)
 
 ## The idea
 
