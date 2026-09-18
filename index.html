@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+k<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="utf-8">
@@ -231,8 +231,30 @@ array_min: results &gt;= 10
 </footer></div>
 
 <script type="module">
-import { createClient } from "https://esm.sh/genlayer-js@2.0.0-rc.1";
-import { studioDevnet } from "https://esm.sh/genlayer-js@2.0.0-rc.1/chains";
+// The SDK is loaded dynamically with a fallback CDN and a visible failure.
+// A static import that fails takes the whole module down silently: the wallet
+// list stays on "detecting", the case list stays on "Loading", and the page
+// looks dead with no indication why. Reported by a reviewer whose browser
+// could not reach esm.sh.
+const CDNS = [
+  "https://esm.sh/genlayer-js@2.0.0-rc.1",
+  "https://cdn.jsdelivr.net/npm/genlayer-js@2.0.0-rc.1/+esm",
+];
+
+let createClient, studioDevnet, sdkError = null;
+
+async function loadSdk() {
+  for (const base of CDNS) {
+    try {
+      const main = await import(base);
+      const chains = await import(base.includes("jsdelivr") ? base.replace("/+esm", "/chains/+esm") : base + "/chains");
+      createClient = main.createClient;
+      studioDevnet = chains.studioDevnet;
+      return base;
+    } catch (e) { sdkError = e; }
+  }
+  return null;
+}
 
 const $ = id => document.getElementById(id);
 const log = m => { $("log").textContent = new Date().toLocaleTimeString() + "  " + m + "\n" + $("log").textContent; };
@@ -240,8 +262,7 @@ const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "
 const KINDS = ["contains:", "json_equals:", "json_exists:", "array_min:"];
 const isMech = t => KINDS.some(k => String(t).startsWith(k));
 
-const readClient = createClient({ chain: studioDevnet });
-let writeClient = null, account = null, contract = null;
+let readClient = null, writeClient = null, account = null, contract = null;
 
 const wallets = new Map();
 function renderWallets() {
@@ -255,6 +276,9 @@ window.addEventListener("eip6963:announceProvider", e => {
 });
 window.dispatchEvent(new Event("eip6963:requestProvider"));
 setTimeout(renderWallets, 400);
+setTimeout(renderWallets, 1200);
+setTimeout(renderWallets, 3000);
+setTimeout(() => { window.dispatchEvent(new Event("eip6963:requestProvider")); renderWallets(); }, 1500);
 
 async function ensureChain(p) {
   try {
@@ -327,10 +351,29 @@ async function refresh() {
         ${b.settlement ? `<p><strong>Settlement:</strong> ${esc(b.settlement)}</p>` : ""}
       </div>`;
     }).join("");
-  } catch (e) { log("refresh failed: " + (e.message || e)); }
+  } catch (e) {
+    const m = "Could not read the registry: " + (e.message || e);
+    log(m);
+    $("list").innerHTML = '<p class="note" style="margin:0;color:var(--no)">' + esc(m) + '</p>';
+  }
 }
 
-loadRegistry();
+(async () => {
+  $("list").innerHTML = '<p class="note" style="margin:0">Connecting to GenLayer Studio Next…</p>';
+  const used = await loadSdk();
+  if (!used) {
+    const msg = "Could not load the GenLayer SDK from any CDN. " + (sdkError?.message || "");
+    log(msg);
+    $("list").innerHTML = '<p class="note" style="margin:0;color:var(--no)">' + esc(msg) +
+      '<br><br>The contract is live regardless — read it directly at ' +
+      '<a href="https://explorer-studio-dev.genlayer.com/address/0x8379eb6c8425b561cf56AD5104911Ae860268001">the explorer</a>.</p>';
+    return;
+  }
+  log("SDK loaded from " + used);
+  readClient = createClient({ chain: studioDevnet });
+  renderWallets();
+  loadRegistry();
+})();
 </script>
 </body>
 </html>
