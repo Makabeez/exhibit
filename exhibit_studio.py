@@ -101,7 +101,9 @@ class Exhibit(gl.contract.Contract):
     @gl.public.write
     def settle(self, case_id: str) -> str:
         case = self._load(case_id)
-        if case["status"] != "SUBMITTED":
+        if case["status"] != "SUBMITTED" and not (
+            case["status"] == "INADMISSIBLE" and case.get("retryable", False)
+        ):
             raise gl.vm.UserError(f"nothing to judge: case is {case['status']}")
 
         url = case["artifact_url"]
@@ -151,6 +153,27 @@ class Exhibit(gl.contract.Contract):
                 "INCONCLUSIVE: the artifact exceeded the readable window, so "
                 "the jury was not asked to rule. Escrow held. Resubmit a "
                 "smaller or more specific artifact."
+            )
+            self.cases[case_id] = json.dumps(case)
+            return case["verdict"]
+
+        # The fetch succeeded, but did it return the artifact? Measured on
+        # Studio Next (run sn-*): `contains: web_claims.py` evaluated FALSE
+        # against the same pinned, content-addressed URL where it had evaluated
+        # TRUE minutes earlier. The source had rate-limited the fetch and
+        # returned an error body - still valid JSON, so every mechanical term
+        # ran on it and the case was ruled against a document that was never
+        # the evidence, with no jury to notice. A pinned URL fixes the
+        # artifact, not the response. Refuse the fetch, hold the escrow, and
+        # let settle() be called again once the source serves the artifact.
+        problem = self._not_an_artifact(evidence)
+        if problem != "":
+            case["retryable"] = True
+            case["status"] = "INADMISSIBLE"
+            case["verdict"] = (
+                "INADMISSIBLE: the fetch did not return the artifact (" + problem +
+                "), so no term was evaluated. Escrow held. Call settle again "
+                "once the source serves the artifact."
             )
             self.cases[case_id] = json.dumps(case)
             return case["verdict"]
@@ -494,6 +517,22 @@ class Exhibit(gl.contract.Contract):
                 return None
             i = i + 1
         return cur
+
+    def _not_an_artifact(self, body: str) -> str:
+        """Return why the fetched body is not a usable artifact, or "" if it is.
+        Pure string inspection: GenVM rejects try/except at schema generation,
+        so the body is never speculatively parsed."""
+        text = body.strip()
+        low = text.lower()
+        if len(text) < 64:
+            return "response too short to be an artifact"
+        if "rate limit exceeded" in low or "too many requests" in low:
+            return "source rate-limited the request"
+        if text.startswith("{") and '"message"' in text and '"documentation_url"' in text:
+            return "source returned an API error object"
+        if low.startswith("<!doctype html") and ("404" in low[:600] or "not found" in low[:600]):
+            return "source returned an error page"
+        return ""
 
     def _pins_a_revision(self, url: str) -> bool:
         parts = url.replace("?", "/").replace("=", "/").replace("&", "/").split("/")
